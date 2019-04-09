@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>		
+	</title>
+	<link rel='stylesheet' href='http://ajax.googleapis.com/ajax/libs/jqueryui/1.7.2/themes/cupertino/jquery-ui.css'>
+	<link rel='stylesheet' href='https://cdn.conversejs.org/css/converse.min.css'>
+	<style type="text/css">
+	body {
+		font-family: Helvetica;
+	}
+
+	h1 {
+		text-align: center;
+	}
+
+	.hidden { 
+		display: none;
+	}
+
+	.button {
+		padding: 10px;
+		background-color: #ddd;
+		border: solid 1px #666;
+		font-weight: bold;
+	}
+
+	#toolbar {
+		text-align: center;
+		margin-bottom: 15px;
+	}
+
+	#chat-area { 
+		float: left;
+		width: 600px;
+		height: 300px; 
+	}
+
+	.chat-messages { 
+		height: 180px;
+		border-bottom: solid 2px #ddd;
+		overflow: auto; 
+	}
+
+	#chat-area input { 
+		margin-top: 10px; width: 95%;
+	}
+
+	#roster-area { 
+		float: right;
+		border-left: solid 2px #ddd; 
+		padding: 10px;
+		width: 250px;
+		height: 300px;
+	}
+
+	.chat-name { 
+		color: #c33;
+	}
+
+	.chat-message .me { 
+		color: #33c;
+	}
+
+	.chat-event { 
+		font-style: italic; 
+		font-size: 75%;
+	}
+
+	.roster-contact { 
+		padding: 3px;
+	}
+
+	.roster-contact:hover { 
+		background-color: #aaa;
+		color: white;
+	}
+
+	.roster-name { 
+		font-size: 150%;
+	}
+
+	.online { 
+		color: #3c3;
+	}
+
+	.away { 
+		color: #c33;
+	}
+
+	.offline { 
+		color: #ccc;
+	}
+	</style>
+</head>
+<body>
+	<h1>Gab</h1>
+ 	<div id='toolbar'>
+		<button class='button' id='new-contact'>add contact..</button>
+		<button class='button' id='new-chat'>chat with..</button>
+		<button class='button' id='disconnect' onclick="">disconnect</button>
+ 	</div>
+
+	 <div id='chat-area'>
+	 	<ul></ul>
+	 </div>
+
+	<div id='roster-area'>
+		<ul></ul>
+	</div>
+
+	<!-- login dialog -->
+	<div id='login_dialog' class='hidden'>		
+		<input type='text' id='jid' placeholder='JID' style='width: 95%' value="">
+		<input type='password' id='password' placeholder='Password' style='width: 95%' value="">
+	</div>
+
+	<!-- contact dialog -->
+	<div id='contact_dialog' class='hidden'>
+		<label>JID:</label><input type='text' id='contact-jid'>
+		<label>Name:</label><input type='text' id='contact-name'>
+	</div>
+
+	<!-- chat dialog -->
+	<div id='chat_dialog' class='hidden'>
+		<label>JID:</label><input type='text' id='chat-jid'>
+	</div>
+
+	<!-- approval dialog -->
+	<div id='approve_dialog' class='hidden'>
+		<p><span id='approve-jid'></span> has requested a subscription to your presence. Approve or deny?</p>
+	</div>	
+
+<script src='http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.js'></script>
+<script src='http://ajax.googleapis.com/ajax/libs/jqueryui/1.7.2/jquery-ui.js'> </script>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/strophe.js/1.2.16/strophe.js'></script>
+<script src='https://cdn.conversejs.org/dist/converse.min.js'></script>
+<!-- <script src='strophejs-plugin-stream-management-master/strophe.stream-management.js'></script> -->
+
+<script>
+	var Gab = { 
+		connection: null,
+		start_time: null,
+		jid: null,
+		password: null,
+		connected: false
+	};
+
+	$(document).ready(function () { 
+		$('#login_dialog').dialog({
+			autoOpen: true, 
+			draggable: false,
+			modal: true,
+			title: 'Connect to XMPP', 
+			buttons: {
+				"Connect": function () {
+
+					Gab.start_time = (new Date()).getTime();
+					Gab.jid = $('#jid').val();
+					Gab.password =  $('#password').val();
+
+					$(document).trigger('connect', {
+						jid: $('#jid').val(),
+						password: $('#password').val()
+					});
+
+					$('#password').val('');
+					$(this).dialog('close'); 
+				}
+			}
+		});
+
+		$('#disconnect').click(function () {
+			Gab.connection.flush();
+			Gab.connection.disconnect();
+			Gab.connection = null;
+			Gab.jid = null;
+			Gab.password = null;
+			$('#login_dialog').dialog('open');
+		});
+	});
+
+	$(document).bind('connect', function (ev, data) { 
+		var conn = new Strophe.Connection('');
+		conn.connect(data.jid, data.password, CheckStatus);
+		Gab.connection = conn;
+	});
+
+	function CheckStatus(status) {
+		if (status === Strophe.Status.CONNECTING) {
+			console.log("Connecting");
+		}
+		if (status === Strophe.Status.AUTHENTICATING) {
+			console.log("Authenticating");
+		}
+		if (status === Strophe.Status.CONNECTED) {
+			Gab.connected = true;
+
+			console.log("Connected");
+			$(document).trigger('connected');
+		}
+		if (status === Strophe.Status.DISCONNECTING) {
+			console.log("Disconnecting");
+		}
+		if (status === Strophe.Status.DISCONNECTED) {
+			Gab.connected = false;
+
+			console.log("Disconnected");
+			$(document).trigger('disconnected');
+		}
+		if (status === Strophe.Status.CONNFAIL) {
+			console.log("Connection failed");
+		}
+		if (status === Strophe.Status.AUTHFAIL) {
+			console.log("Authentication failed");
+			$('#login_dialog').dialog('open');
+		}
+	}
+
+	$(document).bind('connected', function () { 
+		var elapsed = (new Date()).getTime() - Gab.start_time;
+		console.log(elapsed + " ms");
+	});
+
+	$(document).bind('disconnected', function () {
+		//connect again if timeout
+		if (Gab.connected == false) {
+			toConnect();
+		}
+	});
+
+	function toConnect() {
+		//null when logout is clicked
+		if (Gab.connection != null) {
+			Gab.start_time = (new Date()).getTime();
+			Gab.connection.connect(Gab.jid, Gab.password, CheckStatus);
+		}
+	}
+
+</script>
+
+</body>
+</html>
